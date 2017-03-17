@@ -1,6 +1,8 @@
+#include <JeeLib.h>
 #include <dht11.h>
 #include <RH_ASK.h>
 #include <SPI.h>
+
 
 #define DHT11PIN 2
 #define MQ2PIN A0
@@ -15,10 +17,16 @@ boolean MQ7Alert = false;
 char str_hum[5];
 char str_temp[5];
 
+//Update the below value to define where the sensor will be located - will be used in mqtt topic on gateway code
+char str_location[10] = "zolder";
+
 //MQ2 threshold for alarm
-int MQ2Thres = 150;
+int MQ2Thres = 90;
 //MQ7 threshold for alarm
-int MQ7Thres = 150;
+int MQ7Thres = 90;
+
+//Watchdog for low power consumption
+ISR(WDT_vect) { Sleepy::watchdogEvent(); } // Setup the watchdog
 
 //To change the standard constructor of the RH_ASK driver
 // Paramters are as follow:
@@ -42,6 +50,7 @@ void setup()
 
 void loop()
 {
+  delay(1000);
   Humidity = DHTReadHumidity();
   dtostrf(Humidity, 3, 1, str_hum);
   Temp = DHTReadTemp();
@@ -50,12 +59,10 @@ void loop()
   MQ7Alert = MQ7CODetected();
   char sendMsg[20];
   //Message structure: locationNode&&Humidity&&Temperature&&MQ2Alert&&MQ7Alert 
-  
-  sprintf(sendMsg,"zolder&&%s&&%s&&%d&&%d",str_temp, str_hum, MQ2Alert, MQ7Alert);   
+  sprintf(sendMsg,"%s&&%s&&%s&&%d&&%d",str_location, str_temp, str_hum, MQ2Alert, MQ7Alert);   
   
   sendMessage(sendMsg);
-  Serial.println(sendMsg);
-  delay(3000);
+  Sleepy::loseSomeTime(60000);
 }
 
 float sendMessage(const char message[])
@@ -64,7 +71,6 @@ float sendMessage(const char message[])
   driver.send((uint8_t *)msg, strlen(msg));
   driver.waitPacketSent();
   delay(200);
-  Serial.println("Message sent");
 }
 
 float DHTReadTemp()
@@ -112,42 +118,42 @@ float DHTReadHumidity()
   return ((float)DHT11.humidity);
 }
 
+//Sensitive for Methane, Butane, LPG, smoke.
 boolean MQ2SmokeDetected()
 {
   int analogSensor = analogRead(MQ2PIN);
-  Serial.print("Pin A0: ");
-  Serial.println(analogSensor);
+  //Serial.println(analogSensor);
   // Checks if it has reached the threshold value
   if (analogSensor > MQ2Thres)
   {
-    Serial.println("smoke detected");
-    Serial.println(analogSensor);
+    //Serial.println("smoke detected");
+    //Serial.println(analogSensor);
     return true;
   }
   else
   {
-    Serial.println("No smoke detected");
-    Serial.println(analogSensor);
+    //Serial.println("No smoke detected");
+    //Serial.println(analogSensor);
     return false;
   }
 }
 
+//Sensitive for Carbon Monoxide
 boolean MQ7CODetected()
 {
   int analogSensor = analogRead(MQ7PIN);
-  Serial.print("Pin A1: ");
-  Serial.println(analogSensor);
+  //Serial.println(analogSensor);
   // Checks if it has reached the threshold value
   if (analogSensor > MQ7Thres)
   {
-    Serial.println("CO detected");
-    Serial.println(analogSensor);
+    //Serial.println("CO detected");
+    //Serial.println(analogSensor);
     return true;
   }
   else
   {
-    Serial.println("No CO detected");
-    Serial.println(analogSensor);
+    //Serial.println("No CO detected");
+    //Serial.println(analogSensor);
     return false;
   }
 }
