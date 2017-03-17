@@ -3,6 +3,17 @@
 #include <SPI.h> // Not actualy used but needed to compile
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include <MQTTStruct.h>
+
+//Content of MQTTStruct.H file is as follow: 
+//typedef struct {
+//  String Topic;
+//  String Temp;
+//  String Humidity;
+//  String Smoke;
+//  String CO;
+//}MQTTStruct;
+//The above should be placed in arduino folder named MQTTStruct
 
 // Constructor.
 // \param[in] speed The desired bit rate in bits per second
@@ -28,6 +39,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
 EthernetClient ethClient;
 PubSubClient client(ethClient);
 
+
+
 void setup()
 {
     Serial.begin(9600); // Debugging only
@@ -43,8 +56,7 @@ void loop()
 {
     uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
     uint8_t buflen = sizeof(buf);
-    String askMessage;
-    Serial.println("in loop");
+    String askMessage; 
     if (driver.recv(buf, &buflen)) // Non-blocking
     {
         int i;
@@ -52,35 +64,54 @@ void loop()
         {
         askMessage += char(buf[i]);  
         } 
-    char Topic[10];
+    char Topic[15];
     char Values[10];
-    getTopic(askMessage).toCharArray(Topic, 10);
-    getValues(askMessage).toCharArray(Values,10);
 
-    sendMQTTMessage(Topic, Values);
+    MQTTStruct MQTTItemsTotransmit;
+    MQTTItemsTotransmit = getMQTTvals(askMessage);
+
+    String TempTopic = MQTTItemsTotransmit.Location +"/Temp";
+    String HumidityTopic = MQTTItemsTotransmit.Location +"/Hum";
+    String SmokeTopic = MQTTItemsTotransmit.Location +"/Smoke";
+    String COTopic = MQTTItemsTotransmit.Location +"/CO";
+    String Temp = MQTTItemsTotransmit.Temp;
+    String Humidity = MQTTItemsTotransmit.Humidity;
+    String Smoke = MQTTItemsTotransmit.Smoke; 
+    String CO = MQTTItemsTotransmit.CO;
+
+    TempTopic.toCharArray(Topic,15);
+    Temp.toCharArray(Values,10);
+    sendMQTTMessage(Topic,Values);
+    delay(100);
+    HumidityTopic.toCharArray(Topic,15);
+    Humidity.toCharArray(Values,10);
+    sendMQTTMessage(Topic,Values);
+    delay(100);
+    SmokeTopic.toCharArray(Topic,15);
+    Smoke.toCharArray(Values,10);
+    sendMQTTMessage(Topic,Values);
+    delay(100);
+    COTopic.toCharArray(Topic,15);
+    CO.toCharArray(Values,10);
+    sendMQTTMessage(Topic,Values);
     }
-}
-
-//Will reutn the topic from the received message. 
-//Can be used to submit via MQTT as the topic
-String getTopic(String rcvdMessage)
-{
-    String Topic; 
-    uint8_t indexCutoff;
-    indexCutoff = rcvdMessage.indexOf("&&");
-    Topic = rcvdMessage.substring(0,indexCutoff); 
-    return Topic; 
 }
 
 //will return the value of the received message
 //can be used to submit via MQTT as value
-String getValues(String rcvdMessage)
-{
-    String Values; 
-    uint8_t indexCutoff;
-    indexCutoff = rcvdMessage.indexOf("&&");
-    Values = rcvdMessage.substring(indexCutoff); 
-    return Values; 
+MQTTStruct getMQTTvals(String rcvdMessage){
+  MQTTStruct val;
+  uint8_t indexCutoff;
+  int firstIndex = rcvdMessage.indexOf("&&"); 
+  int secondIndex = rcvdMessage.indexOf("&&", firstIndex + 1); 
+  int thirdIndex = rcvdMessage.indexOf("&&",secondIndex + 1);
+  int fourthIndex = rcvdMessage.indexOf("&&",thirdIndex + 1); 
+  val.Location = rcvdMessage.substring(0,firstIndex);
+  val.Temp = rcvdMessage.substring(firstIndex +2,secondIndex);
+  val.Humidity = rcvdMessage.substring(secondIndex+2,thirdIndex);
+  val.Smoke = rcvdMessage.substring(thirdIndex+2,fourthIndex);
+  val.CO=rcvdMessage.substring(fourthIndex+2);
+  return val;   
 }
 
 void sendMQTTMessage(char* Topic, char* Values) {
